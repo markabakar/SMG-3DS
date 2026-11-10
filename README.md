@@ -9,6 +9,9 @@ An unfinished native port of *Super Mario Galaxy* to the New Nintendo 3DS, built
 > **Want to pick it up?** Start with [docs/HANDOFF.md](docs/HANDOFF.md): where the port stands, how to build and test it,
 > and what was being worked on.
 
+> **This is a fork.** It is based on the archived original above (cmyksoda/SMG-3DS) and adds a real-hardware
+> deployment/debugging toolkit plus a few build fixes. See [Fork additions](#fork-additions) below.
+
 ## Status
 
 - **The game's own code runs on the 3DS.** All 1,803 of Petari's source files compile for the 3DS's ARM11 CPU,
@@ -38,6 +41,42 @@ The game is `mario_probe.3dsx`. It kept the name from when it was a bring-up pro
 Start with [docs/HANDOFF.md](docs/HANDOFF.md). It explains how the port is put together, how it was tested, what is
 known to be broken, and what was being worked on when it stopped. [docs/PORTING.md](docs/PORTING.md) holds the
 detailed notes on every part of the port.
+
+## Fork additions
+
+This fork keeps the original port as-is and layers on top a set of tools and fixes aimed at **getting it running and
+debuggable on a real New 3DS**, and at making the build work on a plain Windows + devkitARM toolchain.
+
+### GPU / build improvements
+- **GPU-overlap optimization** (the original author's `docs/untested/gpu-overlap.diff`) applied to
+  `source/compat/GxRender.cpp`, reducing per-frame GPU stalls.
+- **Windows / GCC 15 build fixes** so it compiles with a current devkitARM toolchain — in `CMakeLists.txt`,
+  `tools/3ds-toolchain.cmake` and `tools/prepare-petari.py`.
+- Every source change vs. upstream is captured in `source-changes-vs-upstream.patch`.
+
+### Real-hardware toolkit (`real-hardware/`)
+A self-contained kit for deploying to and debugging on a console, without the "edit → pull the SD card → guess" loop:
+- **Network deploy** — `deploy-3ds.py` pushes a build to the 3DS over the network via `3dslink` (no SD-card swapping).
+- **Live logging** — `live-log.py` streams the game's `stderr` back to your PC in real time (via the `netlog` build
+  variant), so crashes and GPU warnings show up immediately instead of ending in a black screen.
+- **On-device debugging** — `GDB-3DS.cmd` attaches to the Rosalina GDB stub over Wi-Fi; pair it with the `debug`
+  build's `optional/SMG-3DS-debug.elf` for symbols.
+- **Build variants** — `make_fps_build.py` (on-screen FPS), `make_clipfix_build.py` (PICA200 clipping workarounds),
+  `make_debug_build.py` and `make_netlog_build.py` generate the different `.3dsx` variants. These artifacts are
+  produced locally and are **not committed** (they contain decompiled game code and are built from your own disc image).
+- **CJK / Chinese-system boot fix** — on a Chinese-language 3DS the original build aborts at boot because `Bmg.cpp`
+  has no layout for a ruby-tag BMG group. `optional/SMG-3DS-english.3dsx` forces `SC_LANG_ENGLISH` and boots correctly.
+  See `real-hardware/cia/ROOT-CAUSE.txt`.
+- `real-hardware/DEBUGGING.md` is the full walkthrough; `real-hardware/START-HERE.txt` is the quick start.
+
+### Real-hardware measurements (`baseline/`)
+GPU timing captures from a real New 3DS LL (~14.77 fps, ~51 ms/frame waiting on the PICA200), used as the
+before/after baseline for any optimization.
+
+### What is *not* included
+No game data, disc images, `.3dsx`/`.cia` binaries, DSP firmware (`.cdc`), or upstream source trees are committed.
+Build artifacts are generated locally from your own disc image. This keeps the repo source-only and avoids
+redistributing copyrighted material.
 
 ## Made with
 
