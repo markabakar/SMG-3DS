@@ -1,0 +1,99 @@
+装了 CIA 但 HOME 菜单没图标 —— 排查清单
+==========================================
+
+先说结论：这个 CIA 在 Azahar 里走完整安装流程是成功的
+（`Service.AM::InstallCIA: Installed ... successfully`，SD 卡生成了
+`title/00040000/.../content/*.app` + `*.tmd`，ticket 写进 ticket.db），
+ctrtool 校验所有内容哈希 GOOD、ExeFS/Exheader 正常、SMDH 里 HOME Menu 的
+**可见性位 0x0001 是开着的**、图标像素非空。
+所以「图标没出现」基本不是文件坏了，而是下面这几类现场原因。
+
+本项目另备了 **v2 加固版**（`SMG-3DS.cia`，TitleID `000400000FF3FF00`），
+一次性改掉了几个可疑点，建议按第 3 步换装。
+
+
+第 1 步：确认到底装没装上（最关键）
+------------------------------------
+用 FBI → "Titles" / "Title List" 查，或用 GodMode9 看 SD 卡：
+
+  Nintendo 3DS/<ID0>/<ID1>/title/00040000/
+      0a5d3300/content/     ← v1（旧版 TitleID）
+      0ff3ff00/content/     ← v2（新版 TitleID）
+  每个里面应有：00000000.tmd (2,868 B) 和一个约 6.3 MB 的 .app
+
+- **目录不存在 / FBI 报错误码** → 安装失败，不是图标问题。常见原因：
+  - Luma3DS 版本太旧或签名补丁没生效。这是**测试签名的自制 CIA**
+    （ctrtool 会报 Ticket/TMD 签名 invalid，属正常），必须靠 Luma 的
+    sig patches 才能装；FBI 若返回 0xD8A0xxxx / 0xC8A0xxxx 一类错误就是它。
+    解决：升级到较新的 Luma3DS，确认 Luma 配置里签名绕过可用，重装。
+  - 用 FBI 安装时选错了目标（SD vs NAND），或 SD 卡空间不足（需 ≥4 GB 空余）。
+  - CIA 文件传输不完整。核对 SHA-256：
+      v2 = e2cb8020b93f527eaabf5f18b7e971d4a296f56e9d69403c61a8a3b38cf5422b
+      v1 = 483ab56656297e25d43e764ba5290a9307daefd2f8664433149fa629c336d8b7
+- **目录存在、FBI 说成功** → 装上了，继续第 2 步。
+
+
+第 2 步：装上了却没图标
+------------------------
+按可能性从高到低试：
+
+1. **重启整机**。HOME Menu 在启动时重建图标数据库，刚装完常常要重启才出现。
+   也可以进「系统设置 → 其他设置 → 系统更新」（不联网也会刷新 title 数据库），
+   然后退出回 HOME Menu。
+2. **SysNAND / EmuNAND 装错地方**。Luma3DS 可能默认启动 EmuNAND；FBI 装到哪个
+   NAND，图标就只出现在那个 NAND 的 HOME Menu。确认你当前启动的系统和 FBI
+   安装时的目标一致；不确定就两个 NAND 都装一次，或统一用 SysNAND。
+3. **Title 分类 / UniqueId**。v1 用了自定义 `0xA5D33`，落在非常规区间；
+   自制软件普遍用 `0xFF000–0xFFFFF` 保留区（例如 makerom 官方样例 `0xff3ff`）。
+   某些系统版本会把非常规区间的 title 当成非应用类而不在 HOME Menu 列出。
+   **这正是 v2 换 ID 的原因。**
+4. **HOME Menu 图标缓存**：SMDH 的 `0x0080`（usage recorded）位若没置，
+   使用记录不会写进 HOME Menu 的 icon cache。v2 已补上。
+5. **SD 卡上的 `3ds/SMG-3DS/` 资源缺失不会导致"没图标"**（只会导致启动后读不到盘），
+   但装完请确认它还在：`game.wbfs`、`settings.ini`、`dspfirm.cdc`。
+
+
+第 3 步：换装 v2（推荐）
+------------------------
+`cia/SMG-3DS.cia` 已更新为 v2，相对 v1 改了这些（不改游戏本体，仍是同一个 ELF）：
+
+  TitleID     000400000A5D3300  ->  000400000FF3FF00   (homebrew 保留区)
+  ExeFS       .code + icon      ->  .code + icon + logo (-exefslogo)
+  SMDH flags  0x141             ->  0x1C1   (补 0x0080 usage recorded，保留 0x0001 可见性)
+  Region      0xFFFFFFFF        ->  0x7FFFFFFF (标准 region free)
+  权限        804MHz / L2 / Core2 / 124MB / Direct SDMC 全部保持不变
+
+**因为 TitleID 变了，v2 是另一个 title，不会覆盖 v1**：
+1. FBI → Titles → 找到并**删除旧的 `000400000A5D3300`**（否则会残留一个没图标的条目）。
+2. 安装 v2 到 SD。
+3. **重启 3DS**，再看 HOME Menu。
+
+v2 已用 `azahar -i` 完整安装验证成功，ctrtool 校验全部内容哈希 GOOD。
+
+
+第 4 步：还不行的话
+--------------------
+请把这几项告诉我，我据此继续定位（这些是我这边看不到的）：
+  - FBI 安装时的结果文字 / 错误码（有截图最好）
+  - FBI 的 Title List 里有没有 `SMG-3DS` 或对应 TitleID
+  - Luma3DS 版本，以及当前是 SysNAND 还是 EmuNAND
+  - 3DS 机型（New 3DS / New 2DS XL / 老款）与系统版本
+  - 重启后是否仍旧没有
+
+另外两个可行方向：
+- **暂时绕过 CIA**：直接用 Homebrew Launcher 启动 `3ds/SMG-3DS/SMG-3DS.3dsx`
+  （官方原版），不需要 HOME Menu 图标，共用同一份 SD 卡资源，功能完全一样。
+- **缺 banner**：v1/v2 都没有 banner（ExeFS 只有 .code/icon/logo），
+  HOME Menu 启动动画会是默认。按现有资料 banner 不是显示图标的必要条件，
+  但如果上面几步都排除后仍不显示，可以补一个 banner.bin 再重打 —
+  本机没有 bannertool 的 Windows 构建，需要另行准备。
+
+
+附：本机可复现的检查命令（在 smg3ds/tools-cia/）
+-----------------------------------------------
+  ./ctrtool/ctrtool.exe -p SMG-3DS.cia          # 结构 / TitleID / ExeFS
+  ./ctrtool/ctrtool.exe -y SMG-3DS.cia          # 哈希（签名 FAIL 属预期）
+  ./ctrtool/ctrtool.exe -t exheader -v exheader.bin
+  azahar.exe -i SMG-3DS.cia                    # 走一遍真实安装流程
+
+2026-11-08

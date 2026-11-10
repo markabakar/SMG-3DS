@@ -1,0 +1,107 @@
+诊断版 3dsx —— 把崩溃原因写进 SD 卡
+=====================================
+
+★ 根因已定位：cia/ROOT-CAUSE.txt（系统语言 → BMG ruby tag → abort）。
+  只想让游戏跑起来请用 install-diag.py <盘符> --english。
+
+★ 要「详细逐步骤 / 一键脚本」请直接看 C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\STEP-BY-STEP-DIAG.txt ；
+  本文件讲的是**为什么需要它**和日志怎么读，下面三步是手动版概览。
+
+适用：New 3DS LL，官方原版 3dsx 启动后下屏出现 `SMG boot bring-up`、
+上屏没出来就退出/重启；删掉 dspfirm.cdc 也没用；`luma/dumps/` 是空的。
+
+
+为什么需要它（已查明的机制）
+----------------------------
+官方本体 `mario_probe` 的 main() 里：
+
+    consoleInit(GFX_BOTTOM, nullptr);      // 下屏 console
+    consoleDebugInit(debugDevice_SVC);     // ★ 把 stderr 抢到 SVC
+    printf("SMG boot bring-up");           // stdout -> 下屏，所以你看得到这一行
+
+- 读盘失败走 `stop()`，CPU 异常走 `smgFault()`，**两者都把原因打到 stderr**；
+  但 `debugDevice_SVC` 在真机上不可见，所以下屏只有 `SMG boot bring-up`，看不到原因。
+- 两者最后都调用 `svcExitProcess()`（见 `__wrap_abort` / `smgFault`）——
+  **这是应用主动退出，不是硬件重启**，看起来像"崩溃重启"。
+- 程序用 `threadOnException(smgFault, ...)` 注册了自己的异常处理器，
+  优先于 Luma 接管，所以 **`SD:/luma/dumps/` 永远不会生成 dump** —— 这也解释了
+  你找不到文件的原因。不是 Luma 没开，是这个程序自己把异常吃了。
+
+诊断版只做一件事：在 main 早期把 stderr **无缓冲重定向**到
+`sdmc:/3ds/SMG-3DS/boot-log.txt`，并在 `smgGameMain()` 前后打点。
+游戏逻辑、渲染器都用官方 v0.1.0 原版源码（只加了 GCC 15 链接修复），
+不引入 gpu-overlap 补丁这个变量。
+
+
+怎么用（三步）
+--------------
+1. 把 `optional/SMG-3DS-diag.3dsx` 拷到 SD 卡，改名为
+
+       SD:/3ds/SMG-3DS/SMG-3DS.3dsx
+
+   （覆盖官方版；建议先把原来的 6,704,396 B 原版另存一份备份）
+
+2. 用 Homebrew Launcher 启动，等它照常崩/退出。
+   下屏仍会显示 `SMG boot bring-up`，这是正常的（stdout 还在下屏）。
+
+3. 把 SD 卡插回电脑，取这个文件发我：
+
+       SD:/3ds/SMG-3DS/boot-log.txt
+
+   用完把官方原版 3dsx 拷回去（包里 `3ds/SMG-3DS/SMG-3DS.3dsx` 就是）。
+
+诊断版 SHA-256 `a34b998e70b5d18efd65ee2c1b89afa7e8852a6006cf1e4ae8610fdecf83140a`
+
+
+日志里会有什么（怎么读）
+------------------------
+  DIAG: stderr mirrored to boot-log.txt   诊断版生效
+  mario-probe: application memory ... KiB, ... free
+        ★ 关键：Azahar 是 126976 KiB（124MB）。真机 HBL 下如果只有 ~65536 KiB
+          （64MB），那就是内存不足 —— Homebrew Launcher 没给到 New3DS 的大内存模式，
+          程序加载资源时会 OOM / abort。这是目前最可能的根因之一。
+  mario-probe: entering the game's main
+  DIAG: entering smgGameMain              进入原版游戏主体
+  ...
+  可能的结局：
+  a) The disc: WBFS, game RMGE01          盘读到了，继续往下
+  b) The disc image (/3ds/SMG-3DS/game.wbfs): <原因>
+     + mario-probe: callers on the stack: ...
+        → 读盘/解析失败，原因明确写在括号后面
+  c) mario-probe: data abort at pc XXXXXXXX, address ..., lr ..., sp ...
+     + mario-probe: callers on the stack: ...
+        → CPU 异常，PC/LR 地址能定位到具体模块
+  d) 只有 "entering smgGameMain" 就断了（没有 b/c）
+        → 崩在更底层（GPU/PICA、硬件 fault），或写日志前就掉电；
+           把文件内容发我，我再据此做下一步。
+  DIAG: smgGameMain returned             正常返回（真机上基本不会看到）
+
+`boot-log.txt` 是每次启动清空重写、无缓冲写入，所以即使 `svcExitProcess()`
+立即退出，最后几行也会留在卡上。
+
+
+同时请顺手核一下（零成本）
+--------------------------
+- `SD:/3ds/SMG-3DS/game.wbfs` 必须是这个精确路径，大小 **3,508,535,296 B**
+  （3.268 GiB）。别放在 `3ds/3ds/...` 或别的子目录；也别只拷了一部分。
+- SD 卡是 FAT32（3DS 不认 exFAT/NTFS）。
+- 如果方便，用手机录一段启动过程，慢放看崩溃前下屏最后一行 —— 诊断版之前
+  stderr 不在下屏，但 stdout 可能还有别的信息。
+
+
+附：构建记录（给接手的 agent）
+------------------------------
+- 基于 `src/source/compat/GxRender.cpp`（官方原版）+ GCC 15 全局
+  `__ctru_heap_size` 链接修复；只改 `source/probe/MarioProbe.cpp`：
+  ① main 里 `consoleDebugInit` 之后 `freopen("sdmc:/3ds/SMG-3DS/boot-log.txt","w",stderr)`
+  + `setvbuf(_IONBF)`，失败则恢复 `consoleDebugInit(debugDevice_SVC)`；
+  ② `__wrap_abort()` 与 `smgFault()` 在 `svcExitProcess()` 前加 `fflush(stderr)`；
+  ③ `smgGameMain()` 前后各写一行 stderr 打点。
+- 用原生 Python subprocess 调 ninja（TMP/TEMP/TMPDIR 指到工作区 tmp/）编译，
+  rc=0；产物 `build-3ds/mario_probe.3dsx` 另存为
+  `real-hardware/optional/SMG-3DS-diag.3dsx`。
+- 编译后已把 `MarioProbe.cpp`、`GxRender.cpp` 恢复并重新 ninja 构建，
+  `build-3ds/mario_probe.elf` sha256 回到优化版基准 `2185c691…`，工作区一致。
+- 原始文件备份：`tools-cia/MarioProbe.orig.cpp`、`tools-cia/GxRender.gpu-overlap.cpp`。
+
+2026-11-08

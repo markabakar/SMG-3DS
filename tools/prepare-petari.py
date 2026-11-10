@@ -1021,19 +1021,35 @@ adapt("include/Inline.hpp", "include/Inline.hpp", [
     ("#define NO_INLINE __attribute__((noinline))", "#define NO_INLINE", 1),
 ])
 # Metrowerks on Windows opened headers whatever the case of the name in the include.
-for included, present in [
-    ("Game/Enemy/KariKariDirector.hpp", "Game/Enemy/KarikariDirector.hpp"),
-    ("Game/Animation/Xanimecore.hpp", "Game/Animation/XanimeCore.hpp"),
-    ("Game/Map/FileSelectItem.hpp", "Game/Map/FIleSelectItem.hpp"),
-    ("JSystem/JAudio2/JASDSPInterface.hpp", "JSystem/JAudio2/JASDspInterface.hpp"),
-    ("revolution/FS.h", "revolution/fs.h"),
-    ("revolution/MEM.h", "revolution/mem.h"),
-    ("revolution/NAND.h", "revolution/nand.h"),
-]:
-    alias = output / "include" / included
-    alias.parent.mkdir(parents=True, exist_ok=True)
-    alias_text = f'// Generated Petari adaptation: Metrowerks found {present} under this case.\n#include "{present}"\n'
-    emit(alias, alias_text)
+# These forwarding aliases are only valid on a case-sensitive host filesystem.
+# On Windows (case-insensitive) the alias and the file it includes are the SAME
+# file, so the generated header includes itself until GCC's include-depth limit.
+# Skip generating them there; the OS already resolves the case mismatch.
+def case_sensitive_filesystem(directory):
+    directory.mkdir(parents=True, exist_ok=True)
+    probe = directory / ".smg_case_probe"
+    twin = directory / ".SMG_CASE_PROBE"
+    try:
+        probe.write_text("")
+        return not twin.exists()
+    finally:
+        probe.unlink(missing_ok=True)
+
+
+if case_sensitive_filesystem(output / "include"):
+    for included, present in [
+        ("Game/Enemy/KariKariDirector.hpp", "Game/Enemy/KarikariDirector.hpp"),
+        ("Game/Animation/Xanimecore.hpp", "Game/Animation/XanimeCore.hpp"),
+        ("Game/Map/FileSelectItem.hpp", "Game/Map/FIleSelectItem.hpp"),
+        ("JSystem/JAudio2/JASDSPInterface.hpp", "JSystem/JAudio2/JASDspInterface.hpp"),
+        ("revolution/FS.h", "revolution/fs.h"),
+        ("revolution/MEM.h", "revolution/mem.h"),
+        ("revolution/NAND.h", "revolution/nand.h"),
+    ]:
+        alias = output / "include" / included
+        alias.parent.mkdir(parents=True, exist_ok=True)
+        alias_text = f'// Generated Petari adaptation: Metrowerks found {present} under this case.\n#include "{present}"\n'
+        emit(alias, alias_text)
 # Comparisons of a bool or a pointer-holding u32 with nullptr, which Metrowerks took as with 0.
 adapt("src/Game/Player/Mario.cpp", "Game/Player/Mario.cpp", [
     ("if (MR::normalizeOrZero(&front) == nullptr) {", "if (!MR::normalizeOrZero(&front)) {", 1),

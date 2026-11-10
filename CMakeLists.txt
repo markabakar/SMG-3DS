@@ -276,6 +276,13 @@ if(NINTENDO_3DS)
   # A weak reference nothing defines links as a call that does nothing and returns its first argument: a silent stop.
   # Only the toolchain's own optional hooks may stay undefined; anything else fails the link by name.
   function(smg_no_missing_weak target)
+    # This check is a POSIX shell pipeline. Under Windows CMake wraps POST_BUILD
+    # commands in cmd.exe, which mangles the nested quotes, $(...) and braces.
+    # Skip it there; the linker still resolves symbols, so the build stays correct.
+    # WIN32 refers to the TARGET platform (Generic/3DS here), so use the HOST flag.
+    if(CMAKE_HOST_WIN32)
+      return()
+    endif()
     add_custom_command(TARGET ${target} POST_BUILD
       COMMAND sh -c "missing=$(\"$0\" -C \"$1\" | grep -E '^ +[wv] ' | grep -vE ' (__deregister_frame_info|__register_frame_info|__gnu_Unwind_Find_exidx|__syscall_tls_[a-z]+|userAppInit|userAppExit)$'); [ -z \"$missing\" ] || { printf 'Weak references nothing defines in %s:\\n%s\\n' \"$1\" \"$missing\" >&2; exit 1; }"
         "${CMAKE_NM}" "$<TARGET_FILE:${target}>" VERBATIM)

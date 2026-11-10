@@ -1,0 +1,128 @@
+根因定位：系统语言 → BMG ruby tag → 程序主动 abort
+====================================================
+（2026-11-08 21:10，依据 F:\3DS\SMG-3DS\boot-log.txt）
+
+
+日志逐行解读
+------------
+  DIAG: stderr mirrored to boot-log.txt        诊断版生效
+  mario-probe: application memory 126976 KiB   124MB 内存正常 → **排除内存不足**
+  DIAG: entering smgGameMain                   已进入原版游戏主体
+  The disc: WBFS, game RMGE01                  盘读到了、是美版 → **排除读盘失败**
+  original arenaLo/Hi ...                      堆初始化正常
+  NW4R LYT / ARInit / RVL_SDK GX               布局、ARAM、GX 初始化正常
+  The Wii GPU's FIFO: drawn on core 2          渲染线程绑核心 2 成功 → **排除核心权限**
+  A BMG message file has a tag kind the port
+    has no layout for (group 255, type 2)      ★ **这就是失败点**
+  mario-probe: callers on the stack: ...       __wrap_abort() 打印调用栈后退出
+
+`mario-probe: callers on the stack` 来自 `__wrap_abort()`，
+说明是 **程序自己 abort() → svcExitProcess()**，不是 CPU fault、
+不是 GPU 挂死、不是硬件重启。所以之前 `luma/dumps/` 一直是空的。
+
+addr2line 反查调用栈（官方原版 ELF）：
+  MessageData::MessageData(char const*)  →  GameSystemObjHolder::initDisplay()
+  JKRArchive::getResource(...)
+即：启动初始化显示时从归档取 BMG 消息文件 → 就地转换失败 → 拒绝 → abort。
+
+
+根因链
+------
+1. `source/compat/SystemConfig.cpp` 的 `SCGetLanguage()` 用
+   `CFGU_GetSystemLanguage()` 把 **3DS 的系统语言映射成 Wii 语言**
+   （日语→SC_LANG_JAPANESE，简中→SC_LANG_SIMP_CHINESE，繁中→…，
+   其余默认 SC_LANG_ENGLISH）。
+2. 你的是日版机 + 汉化，系统语言不是英语 → 游戏据此加载了
+   **非英语的 BMG 文本**（CJK 文本里带 ruby / 振り仮名 控制 tag）。
+3. `docs/PORTING.md`「Messages (BMG)」原文：
+   > A kind with parameters the port has no layout for is refused whole, by name:
+   > **the system group's ruby** (its text sits at an odd byte), group 8's message
+   > index and group 11 **aren't on the US disc**.
+   作者的 `resource_audit` 只跑过美版盘的 3 个 BMG 文件、50 种 tag、none refused。
+   **`group 255` = system group，`type 2` = ruby**，美版盘上没有，所以没实现。
+4. `source/core/Bmg.cpp:65` 的 `planParameters()` 只支持
+   `(group == 255 && type == 0)`（玩家名/颜色，getParam8）；
+   `type == 2` 落进 else → `problem("has a tag kind the port has no layout for ...")`。
+5. `source/compat/NativeResources.cpp::smgNativeBmg()` 见到错误就
+   `fprintf(stderr, ...)` + `std::abort()` → `__wrap_abort()` → `svcExitProcess()`。
+   **这就是你看到的「下屏 SMG boot bring-up 之后崩溃重启」。**
+
+为什么 Azahar 上从来没崩：模拟器的系统语言默认是英语，
+`SCGetLanguage()` 返回 `SC_LANG_ENGLISH`，游戏加载作者验证过的美版英语 BMG，
+根本不会碰到 ruby tag。这是纯真机环境差异，与 CIA / gpu-overlap 补丁 /
+dspfirm / SD 卡 / 内存全都无关 —— 前面几轮的怀疑至此全部排除。
+
+
+解法 A（推荐，不用改系统设置）：强制英语修复版
+-----------------------------------------------
+`optional/SMG-3DS-english.3dsx`（6,590,648 B，
+SHA-256 `5c13c3b7796766ef73dae2782136f5bdc37d37b4113eafe114b191fbda6128fa`）
+
+改动只有一处：`SCGetLanguage()` 直接 `return SC_LANG_ENGLISH;`
+（`SC_LANG_ENGLISH = 1`，见 `revolution/sc.h`），
+其余用官方 v0.1.0 原版渲染器，并保留诊断版的 stderr→boot-log.txt 落盘，
+所以万一还有下一个 abort，日志照样能拿到。
+
+★ 日常推荐升级：`SHOW-FPS.bat` / `install-diag.py F: --fps` 装的是「帧率显示版」，
+它包含下面这个强制英语修复，并在下屏固定一行显示 FPS，其余完全一致。
+
+一键安装（★ 推荐：双击批处理，不需要敲命令）
+----------------------------------------------
+双击这个文件（默认就是 F:，你的 SD 卡盘符）：
+
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\FIX-ENGLISH.bat
+
+要换盘符或先预览，就在终端里带参数调用它：
+
+    "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\FIX-ENGLISH.bat" F: --dry-run
+    "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\FIX-ENGLISH.bat" F:
+
+用完双击 `...\real-hardware\RESTORE-STOCK.bat` 恢复官方原版。
+
+等价的一行命令（用 py -3，别用 python）：
+
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\install-diag.py" F: --english
+
+⚠️ 为什么不能直接写 `python "..."`：本机 PATH 第一项是
+`C:\devkitPro\msys2\usr\bin\python.exe`（MSYS2 版 Python），它按 POSIX 规则
+解析参数，会把 `C:\Users\...` 当成相对路径，拼到当前目录后面，于是报
+`can't open file '/c/Windows/system32/C:\Users\...': No such file or directory`。
+`py -3` 会调用 Windows 原生 Python 3.14，路径解析正常。两个 .bat 内部也是
+直接定位原生 python.exe，完全绕开 PATH。
+
+然后走 Homebrew Launcher 启动 SMG-3DS，等 1-3 分钟，
+理论上应该能进标题画面（真机约 14 fps，画面仍有作者列出的已知缺陷）。
+
+注意：这个版本**不会**让中文/日语文本正常显示 —— 它只是强制走美版验证过的
+英语路径，绕开未实现的 ruby tag。菜单/文本会是英文，但游戏能跑。
+
+
+解法 B（零成本，先试也行）：把 3DS 系统语言改成 English
+--------------------------------------------------------
+系统设置 → 语言 → English → 重启，再用**官方原版 3dsx**启动。
+原理同上：让 `SCGetLanguage()` 返回英语。
+但汉化过的系统不一定好切语言、切了会影响其它软件，
+所以**解法 A 更稳妥**；A 不需要动系统设置。
+
+
+如果解法 A 之后仍然退出
+------------------------
+修复版仍会把 stderr 写进 `F:\3DS\SMG-3DS\boot-log.txt`。
+把新的日志发我：预期会越过 BMG 那一行，继续往下；
+若停在别处，就用同样的方法定位下一个未实现的资源/布局。
+
+
+仍未解决 / 已知限制
+--------------------
+- ruby tag（group 255 type 2）本身**没有实现**，只是绕开；
+  想真正支持 CJK 文本，需要在 `Bmg.cpp::planParameters()` 里加这个 tag 的
+  参数布局（其文本位于奇数字节，作者特意注明），并重新跑 `resource_audit` 验证。
+- 真机约 14 fps、天空/mip/水面缺陷、HOME 关闭可能挂起等项目固有老问题照旧。
+- `SMG-3DS.cia` 仍是官方原版 ELF，但它**没有**强制英语；
+  在汉化机上装 CIA 大概率仍会踩同一个 BMG abort。
+  如需 CIA 版修复，用同一套源码改 `SystemConfig.cpp` 后重打即可（命令见台账 §28）。
+
+源码依据：`source/core/Bmg.cpp`、`source/compat/NativeResources.cpp`、
+`source/compat/SystemConfig.cpp`、`docs/PORTING.md`「Messages (BMG)」。
+
+2026-11-08

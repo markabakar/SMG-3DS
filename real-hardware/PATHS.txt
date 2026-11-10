@@ -1,0 +1,159 @@
+完整绝对路径清单（不再用省略号）
+==================================
+
+所有文档里出现的 `cia/xxx`、`optional/xxx`、`3ds/xxx`、`../xxx`
+都是相对于下面这个**包根目录**：
+
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\
+
+把下面任意一行复制粘贴到资源管理器地址栏，就能直接打开。
+
+
+【本机 · 脚本与说明】（完整绝对路径）
+------------------------------------
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\install-diag.py
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\FIX-ENGLISH.bat          ★ 双击即可，默认 F:
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\SHOW-FPS.bat             ★★ 双击装帧率显示版（推荐）
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\RESET-SETTINGS.bat       ★ 清掉 dev.* 实验开关
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\TRY-CLIPFIX.bat          ★ 实验裁剪版（真机未验证）
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\RESTORE-STOCK.bat       ★ 双击恢复原版
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\DEBUGGING.md             ★ 实机调试手册
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\deploy-3ds.py           ★ 3dslink 推送 / ftpd 写卡 / 拉日志
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\live-log.py             ★ 实时/轮询日志 + CSV
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\WATCH-NETLOG.bat        ★ 一键实时日志（给 3DS IP）
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\GDB-3DS.cmd             ★ 一键接真机 GDB（给 3DS IP）
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\optional\SMG-3DS-fps.3dsx
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\optional\SMG-3DS-clipfix.3dsx
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\optional\SMG-3DS-debug.3dsx     ★ 调试版（GDB 部署用）
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\optional\SMG-3DS-debug.elf      ★ GDB 符号文件
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\cia\RENDER-ARTIFACTS.txt
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\install-to-sd.py
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\prepare-disc.py
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\STEP-BY-STEP-DIAG.txt
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\START-HERE.txt
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\README.txt
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\PATHS.txt
+
+【本机 · 3ds / 文件夹】
+------------------------------------
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\3ds\SMG-3DS\SMG-3DS.3dsx
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\3ds\SMG-3DS\game.wbfs
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\3ds\SMG-3DS\settings.ini
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\3ds\SMG-3DS\nand\
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\3ds\dspfirm.cdc
+
+【本机 · optional / 文件夹】
+------------------------------------
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\optional\SMG-3DS-diag.3dsx
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\optional\SMG-3DS-english.3dsx
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\optional\SMG-3DS.gpu-overlap.3dsx
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\optional\SMG-3DS-debug.3dsx      ★ 调试版
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\optional\SMG-3DS-debug.elf       ★ GDB 符号
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\optional\dspfirm.cdc.from-other-console
+
+【本机 · cia / 文件夹】
+------------------------------------
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\cia\SMG-3DS.cia
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\cia\SMG-3DS-gpu-overlap.cia
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\cia\README-CIA.txt
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\cia\HOWTO-DIAG.txt
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\cia\TROUBLESHOOTING-CRASH.txt
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\cia\TROUBLESHOOTING-ICON.txt
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\cia\ROOT-CAUSE.txt
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\cia\smg3ds.rsf
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\cia\SMG-3DS.smdh
+
+【本机 · 打包好的 zip】（在 smg3ds\ 下，不在 real-hardware\ 里）
+------------------------------------
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\SMG-3DS-hardware-FULL.zip
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\SMG-3DS-hardware.zip
+
+【本机 · 源码 / 工具 / 台账】（排障时可能会提到）
+------------------------------------
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\AGENT_HANDOFF.md
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\tools-cia\
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\build-3ds\
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\src-gpu-overlap\
+    C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\make_debug_build.py   ★ 生成调试构建（3dsx + 对应 ELF），与 make_fps_build.py 同目录
+
+
+【SD 卡 · 目标路径】（盘符以 E: 为例，换成你自己的）
+------------------------------------
+    E:\3ds\SMG-3DS\SMG-3DS.3dsx        ← 要被诊断版覆盖的文件
+    E:\3ds\SMG-3DS\SMG-3DS.3dsx.stock ← 脚本自动生成的原版备份
+    E:\3ds\SMG-3DS\game.wbfs
+    E:\3ds\SMG-3DS\settings.ini
+    E:\3ds\SMG-3DS\nand\
+    E:\3ds\SMG-3DS\boot-log.txt        ← ★ 诊断跑完要取回来的日志
+    E:\3ds\dspfirm.cdc
+    E:\cia\SMG-3DS.cia
+
+
+【完整命令】（不用先 cd，cmd / PowerShell 都能直接跑）
+------------------------------------
+⚠️ 一律用 `py -3`，**不要写 `python`**：本机 PATH 第一项是
+   C:\devkitPro\msys2\usr\bin\python.exe （MSYS2 版），它会把 "C:\Users\..."
+   当成相对路径拼到当前目录后面，报 No such file or directory。
+   `py -3` 调用 Windows 原生 Python 3.14；两个 .bat 也一样绕开了 PATH。
+
+★ 最省事：双击 SHOW-FPS.bat（默认 F:）= 强制英语修复 + 下屏帧率显示；
+  只要英语修复就双击 FIX-ENGLISH.bat；用完双击 RESTORE-STOCK.bat。
+  带参数调用（换盘符 / 预览）：
+    "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\FIX-ENGLISH.bat" F:
+    "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\FIX-ENGLISH.bat" F: --dry-run
+    "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\RESTORE-STOCK.bat" F:
+
+查看盘符：
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\install-diag.py" --list
+
+安装诊断版（把 E: 换成你的 SD 卡盘符）：
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\install-diag.py" E:
+
+预览不写：
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\install-diag.py" E: --dry-run
+
+清掉 settings.ini 里的 dev.* 实验开关（键位设置保留）：
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\reset-settings.py" E:
+
+安装实验裁剪版（★ 真机未验证，针对 2D/JPA 条纹）：
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\install-diag.py" E: --clipfix
+
+安装帧率显示版（★★ 日常推荐，含英语修复 + 下屏 FPS）：
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\install-diag.py" E: --fps
+
+安装强制英语修复版（★ 根因解法，见 cia/ROOT-CAUSE.txt）：
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\install-diag.py" E: --english
+
+恢复官方原版：
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\install-diag.py" E: --restore
+
+一键把整个 3ds/ 拷到 SD 卡：
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\install-to-sd.py" E:
+
+轻量 zip 补齐盘镜像：
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\prepare-disc.py"
+
+==== 实机调试（见 DEBUGGING.md）====
+网络推送调试版到真机（不拔卡；3DS 上 HBL 按 Y 看 IP）：
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\deploy-3ds.py" --ip 192.168.1.50 --build debug
+双击 WATCH-NETLOG.bat 192.168.1.50 ＝ 上面这条 + 实时把 stderr 格式化打印（帧率/崩溃）
+
+实时看真机日志（三种来源任选）：
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\live-log.py" --stdin      ← 接 3dslink --server 管道
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\live-log.py" --drive F:     ← SD 卡盘符
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\live-log.py" --ftp 192.168.1.50  ← 轮询 ftpd
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\live-log.py" --stdin --csv baseline/runN.csv  ← 导出 CSV 做 A/B
+
+接真机 GDB（Rosalina → Debugger → Force-debug next application；端口 4003）：
+    "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\GDB-3DS.cmd" 192.168.1.50
+    # 内部：arm-none-eabi-gdb optional/SMG-3DS-debug.elf → target remote 192.168.1.50:4003
+    # 常用： c 继续 / b 函数或文件:行 下断点 / p 变量 / bt 回溯 / watch 地址
+
+列出全部构建及哈希（部署前核对版本）：
+    py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\deploy-3ds.py" --list
+
+
+2026-11-08
+
+注：用户实际 SD 卡盘符是 F:，日志来自 F:\3DS\SMG-3DS\boot-log.txt；
+上面的 E: 请按实际盘符替换（例如 F:）。

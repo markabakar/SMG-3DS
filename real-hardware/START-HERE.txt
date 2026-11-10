@@ -1,0 +1,87 @@
+START HERE —— CIA 怎么用（照着做就行）
+=======================================
+
+适用：已破解、装了 Luma3DS 的 New 3DS / New 2DS XL。
+本文所有相对路径（cia/ optional/ 3ds/ ../）均以包根目录为基准；完整绝对路径清单见 PATHS.txt。
+包根目录：C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\
+
+老款 3DS / 2DS 跑不动；原版未破解系统装不了。
+
+
+【A】电脑上准备 SD 卡（FAT32）
+------------------------------
+最简单：把 SD 卡插电脑，记下盘符（比如 E:），然后在本包目录执行
+
+    python install-to-sd.py --list          # 找盘符
+    python install-to-sd.py E:              # 一键拷贝（E: 换成你的盘）
+
+不做脚本就手动做这两步：
+  1. 把本包的 `3ds` 文件夹整个复制到 SD 卡根目录（合并，别套一层）。
+     里面已经有 3.3 GB 的 game.wbfs、settings.ini、dspfirm.cdc、3dsx。
+  2. 把 `cia/SMG-3DS.cia` 复制到 SD 卡任意位置（例如根目录 `cias/`）。
+
+安全弹出 SD 卡，插回 3DS。
+
+
+【B】3DS 上安装
+----------------
+  1. 开机，打开 FBI（HOME 菜单里的 FBI，或 Homebrew Launcher 里启动 FBI）。
+  2. FBI 里选 `SD`，进入你放 CIA 的目录，选中 `SMG-3DS.cia` → 按 A。
+  3. 选 `Install and delete CIA`（或 `Install CIA`）→ 按 A 确认，等进度走完，
+     出现成功提示。若报错，看 `cia/TROUBLESHOOTING-ICON.txt`。
+     ★ 这个 CIA 是官方 v0.1.0 原版（版本 0.0.1）。如果之前装过会崩溃的
+       gpu-overlap 优化版，直接再装一次覆盖即可，不用先卸载。
+  4. ★ 如果你之前装过旧版 CIA：先在 FBI → `Titles` → `SD` 里找到
+     TitleID `000400000A5D3300`（名字 SMG-3DS）→ 按 A → 删除，再装这个新版。
+     新版 TitleID 是 `000400000FF3FF00`，不会自动覆盖旧的。
+  5. 按 HOME 回主菜单；**关机再开机一次**（HOME 菜单要重启才重建图标库）。
+     这时应该出现 "SMG-3DS" 图标。
+
+
+【C】启动与操作
+---------------
+  1. 点 SMG-3DS 图标，等约 1 分钟到标题画面（下屏会一直显示
+     `SMG boot bring-up` 调试文字，正常）。
+  2. 标题上 `Press both A and B` = 3DS 的 **A + R 一起按**。
+
+  移动        Circle Pad      跳跃        A 或 B
+  旋转        X 或 Y          蹲下/砸地  L
+  发射星屑    R               镜头归位   ZL
+  指针归位    ZR              暂停       Start
+  Wii 十字键  D-pad
+
+  指针默认是下屏触摸（stylus）：按住拖动，指针会出现在上屏对应位置，
+  按 R 朝它发射星屑。想换成 C-Stick / 陀螺仪，改
+  `SD:/3ds/SMG-3DS/settings.ini` 的 `pointer=`，重启游戏生效。
+  Mario 要先在 Gateway Galaxy 从 Luma 拿到能力才能旋转，跟 Wii 一样。
+
+
+【D】三条不能忘
+---------------
+- **别删 `SD:/3ds/SMG-3DS/`**：3.3 GB 盘镜像在里面，游戏每帧都从这读。
+  CIA 只是启动方式，资源不在 CIA 里。
+- 真机约 **14 fps**，天空/mip/水面有画面缺陷，这是项目未完成所致；
+  从 HOME 菜单关闭可能挂起，真挂了长按电源强制关机。
+- 不想折腾 CIA 也能玩：直接用 Homebrew Launcher 启动
+  `SD:/3ds/SMG-3DS/SMG-3DS.3dsx`（官方 v0.1.0 原版），共用同一份资源。
+
+
+装完没图标 → `cia/TROUBLESHOOTING-ICON.txt`
+打开崩溃重启 → ★ `STEP-BY-STEP-DIAG.txt`（详细逐步骤：一键脚本 / 手动改名、
+  3DS 上怎么跑、怎么取 `boot-log.txt`、怎么恢复原版）
+机制说明 → `cia/HOWTO-DIAG.txt`；其他排障 → `cia/TROUBLESHOOTING-*.txt`
+装完进不去 / 想核对文件 → `README.txt`、`cia/README-CIA.txt`
+打开就崩（已定位根因）→ ★ `cia/ROOT-CAUSE.txt`；
+  最省事：双击 `FIX-ENGLISH.bat`（默认 F:），用完双击 `RESTORE-STOCK.bat`
+  命令行写法必须用 `py -3`，不要写 `python`（本机 PATH 里的 MSYS2 Python
+  会把 C:\ 路径拼错）：
+      py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\install-diag.py" F: --english
+★ 想显示帧率：双击 `SHOW-FPS.bat`（默认 F:）= 英语修复 + 下屏 FPS 一行，
+  每 0.5 秒刷新；关掉显示就在 settings.ini 加 dev.show_fps=0。
+画面花纹 / 几何撕裂 → ★ 先双击 `RESET-SETTINGS.bat`（清掉 dev.* 实验开关），
+  再看 `cia/RENDER-ARTIFACTS.txt`；想试实验修复双击 `TRY-CLIPFIX.bat`
+不想再拔卡猜、想在真机上实时看帧率/崩溃、甚至下断点 → ★ `DEBUGGING.md`
+  （3dslink 网络推送 / 实时日志 / Rosalina GDB；一键入口 `WATCH-NETLOG.bat`、GDB-3DS.cmd）
+所有文件的完整绝对路径 → `PATHS.txt`
+
+2026-11-08

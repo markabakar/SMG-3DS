@@ -1,0 +1,110 @@
+真机渲染异常：现象、归因与可试的对照实验
+============================================
+（2026-11-08，依据用户 New 3DS LL 实机照片 + 项目作者文档）
+
+一、照片里看到的
+----------------
+1. Mario 身上白/青色的大斜条，像被拉长的三角形贴在角色上。
+2. 画面顶部一条竖直的白色宽带，从屏幕外一直伸进场景。
+3. 天空出现纯蓝色板块，把远处的绿色山体切成两块。
+4. 地面、HUD（星币/生命/星屑计数）、树木整体正常，颜色与形状基本对。
+
+二、归因：全部落在作者已记录的「真机 PICA200 缺陷」里
+------------------------------------------------------
+`src/docs/HANDOFF.md` 的 "On a real New 2DS XL" 原文列出：
+
+  - "The sky draws as blue slabs near the camera on long jumps."   → 第 3 项
+  - "Shooting stars' trails became giant streaks. A fix is committed
+     but was never confirmed on a console."                        → 第 1、2 项
+  - "Mip levels draw wrong, so they're switched off"               → 可能的地面细节
+  - "Water, shadows, and two thin dotted white lines ... look wrong."
+
+`src/docs/PORTING.md` 的 "On a real 3DS" 解释了成因：Wii 的 JPA 条纹
+（流星/星屑拖尾）是不裁剪直接画的四边形；三角形有顶点落在近平面之后时，
+PICA200 自己裁剪生成的新顶点会被抛到离屏幕几万像素远，PC 显卡（Azahar）
+能容忍，真机 PICA 会把它画成巨大的条纹。代码里的 CPU guard-band 裁剪
+（`GxVertexPipeline::GuardBand`）只作用于透视投影的三角形，作者原话：
+"Nothing else is touched (a 2D draw far past the screen reaches the PICA as
+before). Not yet confirmed on the console; the sky ... is the next candidate."
+
+所以：**照片正好证实了作者说的「修复提交过、从未在真机确认」仍然没生效**，
+不是新问题，也不是本工作区打包/编译引入的。我们给用户的所有 3dsx / CIA
+都用官方 v0.1.0 渲染器，只加了 5 行 GCC 15 链接修复、强制英语、以及
+（FPS 版）下屏文字输出，从未改动任何 GPU/TEV/裁剪逻辑。
+
+★ 最优先：确认不是 dev.* 开关造成的
+------------------------------------
+「网点 / 棋盘花纹」和作者写的 'a chessboard on the title's floor' 一模一样，
+那正是打开 mip 层级后的真机表现。若之前按本文件第三节试过 dev.gx_mips=1
+或别的 dev.* 开关，请先双击包根目录的 RESET-SETTINGS.bat（默认 F:）。
+它只删 settings.ini 里以 dev. 开头的行，键位/指针/速度全部保留，
+原文件备份为 settings.ini.bak。安全弹出插回 3DS、重启游戏后再看。
+命令行等价：py -3 "<包>\reset-settings.py" F:
+
+三、可以立刻做的对照实验（不用重编译，改 settings.ini 后重启游戏）
+------------------------------------------------------------------
+SD:/3ds/SMG-3DS/settings.ini，一次只加/改一行，跑同一个场景对比：
+
+    dev.gx_mips=1      打开被默认关掉的 mip 层级。作者记录真机上
+                       "stray polygons / chessboard on the title's floor"，
+                       所以多半更糟，但能确认纹理路径是否参与。
+    dev.gx_noraw=1     所有 draw 改走 citro3d，绕过 raw command list 路径。
+                       若斜条消失 = 问题在 raw 路径的顶点/索引处理。
+    dev.gx_inline=1    GX 流改在游戏线程绘制（默认渲染线程绑核心 2）。
+                       若斜条变化 = 与渲染线程时序/同步有关。
+    dev.gx_check=1     新建 mesh 时与 CPU path 逐顶点比对（很慢，仅诊断），
+                       日志会指出拒绝原因。
+    dev.gx_timing=1    把 gx perf 明细写进 boot-log.txt，能看到
+                       "new draw states approximated"（7,780 个材质里约 10%
+                       是近似实现），用于判断条纹是否来自材质近似。
+                       注意：计时本身最多拖慢被测对象 1/5。
+
+用完把加的行删掉即可（游戏只在这些键为 1 时回写）。FPS 显示版能在下屏
+直接看到每种开关对帧率的影响，正好用来做这个 A/B。
+
+四、真正修复的方向（作者 TODO，属于主线 #8）
+--------------------------------------------
+1. 天空：把 Sky / Air / Sun 的 display list 强制走 CPU guard-band 路径
+   （`HANDOFF.md` "What was open" 第 4 条）。
+2. JPA 条纹：让 2D / 粒子四边形也参与近平面裁剪，或给它们单独一条
+   guard-band 路径（`GxDraw.cpp` 里 `perspective` 判定目前会跳过 2D draw）。
+3. mip：逐层 tint 成纯色，真机截图与 Azahar 逐层比对，找出哪一级开始错。
+4. 水/阴影/过场白线：需要真机截图 + 分阶段 GPU 计时。
+
+五、为什么现在不直接改渲染器
+----------------------------
+作者反复强调 "Azahar forgives a lot that a real PICA200 doesn't"：
+split 必须带 GX_CMDLIST_FLUSH、零字节 transfer 会让真机冻结、且这些
+问题"freezes at random, run to run"。没有真机 GPU 计时数据、没有快速
+迭代通道时改裁剪路径，很可能把一个还能玩的构建变成随机冻结。这也是
+工作区把 #8（EFB copy / GPU 侧削减）有意暂停在「分析完成」状态的原因。
+
+要推进这块，需要：实机 + ftpd、`dev.gx_timing` / `dev.gx_zones` 的
+真机采样、以及每次改动能在一分钟内重部署验证的通道。硬约束：
+**测试构建绝不能在渲染线程写 SD 卡**（作者实测 +150 ms/帧）。
+
+六、为什么模拟器正常、真机不正常（以及实验构建）
+--------------------------------------------------
+Azahar 把 GX 命令流转成 PC 显卡（OpenGL/Vulkan）的绘制：裁剪是高精度浮点、
+视口/保护带范围大、驱动还会丢掉极端坐标的三角形，所以 Wii 那种「不裁剪
+直接画」的条纹在屏外就消失，画面正常。真机 PICA200 是定点裁剪器，自己
+生成的新顶点会溢出到几万像素外并被当成有效三角形画出来 —— 这也是作者
+反复强调 "Azahar forgives a lot that a real PICA200 doesn't" 的原因。
+换句话说：**模拟器看不出这类 bug，恰恰因为它不是 PICA200**；这类问题
+只能在真机验证，模拟器 A/B 只能用来排除「改动有没有把游戏弄崩」。
+
+实验构建 `optional/SMG-3DS-clipfix.3dsx`（双击 TRY-CLIPFIX.bat 安装）：
+在 FPS 版基础上，把 GxDraw.cpp 里 `perspective` 判定去掉，让 2D / JPA 条纹
+三角形也走 CPU guard-band 裁剪（原本只裁透视三角形）。风险相对可控：
+只在有顶点落近平面之后时才裁，不动任何 GPU 命令序列；但**真机效果未验证**。
+构建配方 `smg3ds/make_clipfix_build.py`。A/B 顺序：
+  1. RESET-SETTINGS.bat 恢复干净配置 + FPS 版，记录画面；
+  2. 同一场景换 clipfix 版，对比蓝板块/条纹/网点是否减少、FPS 是否下降；
+  3. 变差就用 SHOW-FPS.bat 装回对照版，把两张照片发我。
+
+相关文件
+--------
+  完整机制：src-gpu-overlap/docs/PORTING.md "On a real 3DS"
+  已知缺陷：src-gpu-overlap/docs/HANDOFF.md "What was open"
+  裁剪代码：src-gpu-overlap/source/core/GxDraw.cpp::clipToGuardBand
+  交接台账：smg3ds/AGENT_HANDOFF.md §8 / §17 / §19

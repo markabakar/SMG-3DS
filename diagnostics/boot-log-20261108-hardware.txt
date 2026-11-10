@@ -1,0 +1,12 @@
+DIAG: stderr mirrored to boot-log.txt
+mario-probe: application memory 126976 KiB, 0 KiB free
+mario-probe: entering the game's main
+DIAG: entering smgGameMain
+The disc: WBFS, game RMGE01
+original arenaLo = 0x80bfec0 arenaHi = 0x91ffec0
+<< NW4R    - LYT 	final   build: Jul 17 2007 12:25:23 (0x4199_60831) >>
+ARInit : Dummy ARAM enabled (RVL), area 0x91ffee0 -> 0x9fffee0 (size 0xe00000)
+<< RVL_SDK - GX 	release build: Dec 11 2007 01:34:15 (0x4199_60831) >>
+The Wii GPU's FIFO: drawn on core 2
+A BMG message file has a tag kind the port has no layout for (group 255, type 2)
+mario-probe: callers on the stack: 001049f0 0019df5c 0016c71c 0013c328 0013c5ec 00137b88 00171e0c 00172c68 00137dd4 00135fe0 001364a4 00104b74 0063f348 0063c250 006432fc 0063c250

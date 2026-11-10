@@ -50,6 +50,12 @@ extern std::atomic<u32> smgDspTicks;                                  // source/
 
 extern std::atomic<bool> smgAvSyncFramePending;  // source/compat/WiiAudio.cpp, dev.av_sync
 u64 smgAvSyncMarkTick();
+
+// libctru / citro3d C symbols must be declared at GLOBAL scope. Inside the anonymous
+// namespace GCC 15 mangles them (_ZN3smg12_GLOBAL__N_1...) and the linker cannot
+// resolve them against the C definitions in libcitro3d.a / libctru.a.
+extern "C" char __C3D_Context[];   // citro3d: first member of its context, the frame queue
+extern "C" u32 __ctru_heap_size;   // libctru: the free store's size
 namespace smg {
 namespace {
 constexpr std::size_t VertexBytes = 2u << 20, CommandBytes = 1u << 20;
@@ -89,6 +95,10 @@ constexpr u32 DisplayTransferFlags = GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_
 // The target's rows of 8x8 tiles (240 RGBA8 pixels wide) into a 256-wide texture's, in the transfer's 16-byte units.
 constexpr u32 TargetTileRow = 240 * 8 * 4, ScratchTileRow = 256 * 8 * 4;
 
+// citro3d's frame queue, the first member of its context (its internal.h). C3D_FrameBegin stops it and C3D_FrameEnd alone
+// starts it, so the parts of a frame split off at its EFB copies would wait for the whole frame to be built.
+gxCmdQueue_s& frameQueue() { return *reinterpret_cast<gxCmdQueue_s*>(__C3D_Context); }
+
 bool sCopiesStayOnGpu = false;
 bool sStepTiming = false;  // dev.gx_timing, read when the renderer is made
 
@@ -111,8 +121,6 @@ void sampleZones(void*) {
 // hook, so the game's many flushes of other memory (matrices every frame) cost one load. Set as meshes are made,
 // cleared when all are dropped; a stale bit only queues a range for nothing.
 std::atomic<std::uint32_t> sMeshPageBits[1u << 15];
-
-extern "C" u32 __ctru_heap_size;  // libctru: the free store's size
 
 // Ranges the game flushed over mesh pages (gxRenderMemoryChanged), kept until the renderer next looks: the hook runs on
 // any thread, the renderer only under the FIFO's lock. A leaf lock; past the queue's end every mesh is dropped.
@@ -788,6 +796,21 @@ struct Renderer {
         retired.clear();
     }
 
+    // The frame's parts so far go to the GPU now, not at the frame's end: a real 3DS's GPU otherwise sat idle while each
+    // frame was built, a third of the castle's frame time.
+    void runSplit() {
+        flushVertices();
+        C3D_FrameSplit(GX_CMDLIST_FLUSH);
+        gxCmdQueueRun(&frameQueue());
+    }
+    // C3D_FrameEnd with the queue idle and stopped, as C3D_FrameBegin left it: a queue still running could finish the display
+    // transfer before C3D_FrameEnd marks the frame to be shown, and the frame would never show.
+    void endFrame() {
+        gxCmdQueueWait(&frameQueue(), -1);
+        gxCmdQueueStop(&frameQueue());
+        C3D_FrameEnd(GX_CMDLIST_FLUSH);
+    }
+
     // Ends the frame drawn so far without showing it; resume() begins again on the same target once the GPU is done, so
     // the vertex buffer can start over. Inside a frame citro3d's "sync" transfers only queue: readbacks go between.
     void pause() {
@@ -796,7 +819,7 @@ struct Renderer {
         flushVertices();
         C3D_RenderTargetDetachOutput(target);
         fogOff();
-        C3D_FrameEnd(GX_CMDLIST_FLUSH);
+        endFrame();
     }
     void resume() {
         const GxZoneScope zone(ZonePause);
@@ -2608,7 +2631,7 @@ struct Renderer {
         roomFor(18);
         // Queued behind the draws so far, as the pass is behind it. Split here with the flush: C3D_SyncTextureCopy's split
         // leaves its part of the command list in the CPU's cache, and a real GPU then read stale words and froze.
-        C3D_FrameSplit(GX_CMDLIST_FLUSH);
+        runSplit();
         // Only the target's tile rows (8 screen columns each) the copy samples, a column either side for the filter.
         const float left = float(copy.x) * 400.0f / frame.width, right = float(copy.x + copy.width) * 400.0f / frame.width;
         // Never none: a transfer of no bytes freezes a real 3DS.
@@ -2969,8 +2992,7 @@ struct Renderer {
         if (!p.texels) stop("copying a depth tile with no memory to copy it into");
         roomInQueue(2);
         flushBatch();
-        flushVertices();
-        C3D_FrameSplit(GX_CMDLIST_FLUSH);
+        runSplit();
         GX_TextureCopy(static_cast<u32*>(target->frameBuf.depthBuf) + tile * 64, GX_BUFFER_DIM(256 / 16, 0), p.texels, GX_BUFFER_DIM(256 / 16, 0), 256,
                        GX_TRANSFER_RAW_COPY(1));
         p.tile = tile, p.begun = framesBegun, p.frame = framesShown;
@@ -3001,7 +3023,7 @@ struct Renderer {
         if (dumping) std::fprintf(stderr, "gx dump: frame ends after %u draws\n", dumpIndex), dumping = false;
         flushVertices();
         fogOff();
-        C3D_FrameEnd(GX_CMDLIST_FLUSH);
+        endFrame();
         inFrame = false;
         if (smgAvSyncFramePending.exchange(false))
             std::fprintf(stderr, "av sync: the marked frame goes out %.1f ms after the mark\n",

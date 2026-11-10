@@ -1,0 +1,184 @@
+diff -ruN src/CMakeLists.txt src-gpu-overlap/CMakeLists.txt
+--- src/CMakeLists.txt	2026-10-20 04:42:12.000000000 +0800
++++ src-gpu-overlap/CMakeLists.txt	2026-11-08 03:34:14.215631700 +0800
+@@ -276,6 +276,13 @@
+   # A weak reference nothing defines links as a call that does nothing and returns its first argument: a silent stop.
+   # Only the toolchain's own optional hooks may stay undefined; anything else fails the link by name.
+   function(smg_no_missing_weak target)
++    # This check is a POSIX shell pipeline. Under Windows CMake wraps POST_BUILD
++    # commands in cmd.exe, which mangles the nested quotes, $(...) and braces.
++    # Skip it there; the linker still resolves symbols, so the build stays correct.
++    # WIN32 refers to the TARGET platform (Generic/3DS here), so use the HOST flag.
++    if(CMAKE_HOST_WIN32)
++      return()
++    endif()
+     add_custom_command(TARGET ${target} POST_BUILD
+       COMMAND sh -c "missing=$(\"$0\" -C \"$1\" | grep -E '^ +[wv] ' | grep -vE ' (__deregister_frame_info|__register_frame_info|__gnu_Unwind_Find_exidx|__syscall_tls_[a-z]+|userAppInit|userAppExit)$'); [ -z \"$missing\" ] || { printf 'Weak references nothing defines in %s:\\n%s\\n' \"$1\" \"$missing\" >&2; exit 1; }"
+         "${CMAKE_NM}" "$<TARGET_FILE:${target}>" VERBATIM)
+diff -ruN src/source/compat/GxRender.cpp src-gpu-overlap/source/compat/GxRender.cpp
+--- src/source/compat/GxRender.cpp	2026-10-20 04:42:12.000000000 +0800
++++ src-gpu-overlap/source/compat/GxRender.cpp	2026-11-08 22:53:05.070547300 +0800
+@@ -50,6 +50,12 @@
+ 
+ extern std::atomic<bool> smgAvSyncFramePending;  // source/compat/WiiAudio.cpp, dev.av_sync
+ u64 smgAvSyncMarkTick();
++
++// libctru / citro3d C symbols must be declared at GLOBAL scope. Inside the anonymous
++// namespace GCC 15 mangles them (_ZN3smg12_GLOBAL__N_1...) and the linker cannot
++// resolve them against the C definitions in libcitro3d.a / libctru.a.
++extern "C" char __C3D_Context[];   // citro3d: first member of its context, the frame queue
++extern "C" u32 __ctru_heap_size;   // libctru: the free store's size
+ namespace smg {
+ namespace {
+ constexpr std::size_t VertexBytes = 2u << 20, CommandBytes = 1u << 20;
+@@ -89,6 +95,10 @@
+ // The target's rows of 8x8 tiles (240 RGBA8 pixels wide) into a 256-wide texture's, in the transfer's 16-byte units.
+ constexpr u32 TargetTileRow = 240 * 8 * 4, ScratchTileRow = 256 * 8 * 4;
+ 
++// citro3d's frame queue, the first member of its context (its internal.h). C3D_FrameBegin stops it and C3D_FrameEnd alone
++// starts it, so the parts of a frame split off at its EFB copies would wait for the whole frame to be built.
++gxCmdQueue_s& frameQueue() { return *reinterpret_cast<gxCmdQueue_s*>(__C3D_Context); }
++
+ bool sCopiesStayOnGpu = false;
+ bool sStepTiming = false;  // dev.gx_timing, read when the renderer is made
+ 
+@@ -112,8 +122,6 @@
+ // cleared when all are dropped; a stale bit only queues a range for nothing.
+ std::atomic<std::uint32_t> sMeshPageBits[1u << 15];
+ 
+-extern "C" u32 __ctru_heap_size;  // libctru: the free store's size
+-
+ // Ranges the game flushed over mesh pages (gxRenderMemoryChanged), kept until the renderer next looks: the hook runs on
+ // any thread, the renderer only under the FIFO's lock. A leaf lock; past the queue's end every mesh is dropped.
+ struct ChangedMemory {
+@@ -788,6 +796,21 @@
+         retired.clear();
+     }
+ 
++    // The frame's parts so far go to the GPU now, not at the frame's end: a real 3DS's GPU otherwise sat idle while each
++    // frame was built, a third of the castle's frame time.
++    void runSplit() {
++        flushVertices();
++        C3D_FrameSplit(GX_CMDLIST_FLUSH);
++        gxCmdQueueRun(&frameQueue());
++    }
++    // C3D_FrameEnd with the queue idle and stopped, as C3D_FrameBegin left it: a queue still running could finish the display
++    // transfer before C3D_FrameEnd marks the frame to be shown, and the frame would never show.
++    void endFrame() {
++        gxCmdQueueWait(&frameQueue(), -1);
++        gxCmdQueueStop(&frameQueue());
++        C3D_FrameEnd(GX_CMDLIST_FLUSH);
++    }
++
+     // Ends the frame drawn so far without showing it; resume() begins again on the same target once the GPU is done, so
+     // the vertex buffer can start over. Inside a frame citro3d's "sync" transfers only queue: readbacks go between.
+     void pause() {
+@@ -796,7 +819,7 @@
+         flushVertices();
+         C3D_RenderTargetDetachOutput(target);
+         fogOff();
+-        C3D_FrameEnd(GX_CMDLIST_FLUSH);
++        endFrame();
+     }
+     void resume() {
+         const GxZoneScope zone(ZonePause);
+@@ -2608,7 +2631,7 @@
+         roomFor(18);
+         // Queued behind the draws so far, as the pass is behind it. Split here with the flush: C3D_SyncTextureCopy's split
+         // leaves its part of the command list in the CPU's cache, and a real GPU then read stale words and froze.
+-        C3D_FrameSplit(GX_CMDLIST_FLUSH);
++        runSplit();
+         // Only the target's tile rows (8 screen columns each) the copy samples, a column either side for the filter.
+         const float left = float(copy.x) * 400.0f / frame.width, right = float(copy.x + copy.width) * 400.0f / frame.width;
+         // Never none: a transfer of no bytes freezes a real 3DS.
+@@ -2969,8 +2992,7 @@
+         if (!p.texels) stop("copying a depth tile with no memory to copy it into");
+         roomInQueue(2);
+         flushBatch();
+-        flushVertices();
+-        C3D_FrameSplit(GX_CMDLIST_FLUSH);
++        runSplit();
+         GX_TextureCopy(static_cast<u32*>(target->frameBuf.depthBuf) + tile * 64, GX_BUFFER_DIM(256 / 16, 0), p.texels, GX_BUFFER_DIM(256 / 16, 0), 256,
+                        GX_TRANSFER_RAW_COPY(1));
+         p.tile = tile, p.begun = framesBegun, p.frame = framesShown;
+@@ -3001,7 +3023,7 @@
+         if (dumping) std::fprintf(stderr, "gx dump: frame ends after %u draws\n", dumpIndex), dumping = false;
+         flushVertices();
+         fogOff();
+-        C3D_FrameEnd(GX_CMDLIST_FLUSH);
++        endFrame();
+         inFrame = false;
+         if (smgAvSyncFramePending.exchange(false))
+             std::fprintf(stderr, "av sync: the marked frame goes out %.1f ms after the mark\n",
+diff -ruN src/tools/3ds-toolchain.cmake src-gpu-overlap/tools/3ds-toolchain.cmake
+--- src/tools/3ds-toolchain.cmake	2026-10-20 04:42:12.000000000 +0800
++++ src-gpu-overlap/tools/3ds-toolchain.cmake	2026-11-08 03:18:07.251145000 +0800
+@@ -5,8 +5,14 @@
+ if(NOT DEVKITPRO)
+   set(DEVKITPRO /opt/devkitpro)
+ endif()
+-set(CMAKE_C_COMPILER "${DEVKITPRO}/devkitARM/bin/arm-none-eabi-gcc")
+-set(CMAKE_CXX_COMPILER "${DEVKITPRO}/devkitARM/bin/arm-none-eabi-g++")
++# Windows builds need the .exe suffix; the upstream toolchain assumes Linux/Docker.
++if(WIN32)
++  set(DKP_EXE ".exe")
++else()
++  set(DKP_EXE "")
++endif()
++set(CMAKE_C_COMPILER "${DEVKITPRO}/devkitARM/bin/arm-none-eabi-gcc${DKP_EXE}")
++set(CMAKE_CXX_COMPILER "${DEVKITPRO}/devkitARM/bin/arm-none-eabi-g++${DKP_EXE}")
+ set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+ set(CMAKE_C_FLAGS_INIT "-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -D__3DS__ -ffunction-sections -fdata-sections")
+ set(CMAKE_CXX_FLAGS_INIT "${CMAKE_C_FLAGS_INIT} -fno-rtti -fno-exceptions")
+diff -ruN src/tools/prepare-petari.py src-gpu-overlap/tools/prepare-petari.py
+--- src/tools/prepare-petari.py	2026-10-20 04:42:12.000000000 +0800
++++ src-gpu-overlap/tools/prepare-petari.py	2026-11-08 03:26:49.027969300 +0800
+@@ -1021,19 +1021,35 @@
+     ("#define NO_INLINE __attribute__((noinline))", "#define NO_INLINE", 1),
+ ])
+ # Metrowerks on Windows opened headers whatever the case of the name in the include.
+-for included, present in [
+-    ("Game/Enemy/KariKariDirector.hpp", "Game/Enemy/KarikariDirector.hpp"),
+-    ("Game/Animation/Xanimecore.hpp", "Game/Animation/XanimeCore.hpp"),
+-    ("Game/Map/FileSelectItem.hpp", "Game/Map/FIleSelectItem.hpp"),
+-    ("JSystem/JAudio2/JASDSPInterface.hpp", "JSystem/JAudio2/JASDspInterface.hpp"),
+-    ("revolution/FS.h", "revolution/fs.h"),
+-    ("revolution/MEM.h", "revolution/mem.h"),
+-    ("revolution/NAND.h", "revolution/nand.h"),
+-]:
+-    alias = output / "include" / included
+-    alias.parent.mkdir(parents=True, exist_ok=True)
+-    alias_text = f'// Generated Petari adaptation: Metrowerks found {present} under this case.\n#include "{present}"\n'
+-    emit(alias, alias_text)
++# These forwarding aliases are only valid on a case-sensitive host filesystem.
++# On Windows (case-insensitive) the alias and the file it includes are the SAME
++# file, so the generated header includes itself until GCC's include-depth limit.
++# Skip generating them there; the OS already resolves the case mismatch.
++def case_sensitive_filesystem(directory):
++    directory.mkdir(parents=True, exist_ok=True)
++    probe = directory / ".smg_case_probe"
++    twin = directory / ".SMG_CASE_PROBE"
++    try:
++        probe.write_text("")
++        return not twin.exists()
++    finally:
++        probe.unlink(missing_ok=True)
++
++
++if case_sensitive_filesystem(output / "include"):
++    for included, present in [
++        ("Game/Enemy/KariKariDirector.hpp", "Game/Enemy/KarikariDirector.hpp"),
++        ("Game/Animation/Xanimecore.hpp", "Game/Animation/XanimeCore.hpp"),
++        ("Game/Map/FileSelectItem.hpp", "Game/Map/FIleSelectItem.hpp"),
++        ("JSystem/JAudio2/JASDSPInterface.hpp", "JSystem/JAudio2/JASDspInterface.hpp"),
++        ("revolution/FS.h", "revolution/fs.h"),
++        ("revolution/MEM.h", "revolution/mem.h"),
++        ("revolution/NAND.h", "revolution/nand.h"),
++    ]:
++        alias = output / "include" / included
++        alias.parent.mkdir(parents=True, exist_ok=True)
++        alias_text = f'// Generated Petari adaptation: Metrowerks found {present} under this case.\n#include "{present}"\n'
++        emit(alias, alias_text)
+ # Comparisons of a bool or a pointer-holding u32 with nullptr, which Metrowerks took as with 0.
+ adapt("src/Game/Player/Mario.cpp", "Game/Player/Mario.cpp", [
+     ("if (MR::normalizeOrZero(&front) == nullptr) {", "if (!MR::normalizeOrZero(&front)) {", 1),

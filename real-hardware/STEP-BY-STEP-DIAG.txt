@@ -1,0 +1,160 @@
+诊断版 —— 详细操作步骤（照着按就行）
+=====================================
+
+★ 根因已定位（系统语言→BMG ruby tag→abort），详见 cia/ROOT-CAUSE.txt。
+  若只想让游戏跑起来，双击 FIX-ENGLISH.bat 即可（等价于
+  `py -3 "...\install-diag.py" F: --english`），不用再看诊断流程。
+
+目的：让程序把「崩溃原因」写进 SD 卡的 `boot-log.txt`。
+这个版本不会修好崩溃，它只是把原本在真机上看不到的错误信息留下来。
+全程只需要动 SD 卡上的一个文件：`3ds\SMG-3DS\SMG-3DS.3dsx`。
+
+本文所有相对路径（cia/ optional/ 3ds/ ../）均以包根目录为基准；完整绝对路径清单见 PATHS.txt。
+包根目录：C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\
+
+
+
+【准备工作】需要的东西
+------------------------
+- 一台 Windows 电脑、读卡器、3DS 的 SD 卡
+- 本包目录：`C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\`
+- SD 卡上应该已经有（前几轮装好的）：
+    SD:\3ds\SMG-3DS\SMG-3DS.3dsx      官方原版，6,704,396 字节
+    SD:\3ds\SMG-3DS\game.wbfs         3,508,535,296 字节
+    SD:\3ds\SMG-3DS\settings.ini
+    SD:\3ds\dspfirm.cdc               （删掉也没关系）
+
+
+────────────────────────────────────────
+第 1 步：在电脑上安装诊断版
+────────────────────────────────────────
+
+◆ 做法 A：一键脚本（推荐，不会把文件名搞错）
+
+  1. 把 SD 卡插进电脑，打开「此电脑」，记住盘符，比如 E:
+  2. 按 Win+R 输入 cmd 回车，或打开任意终端窗口（下面这条命令两边都能跑）
+  3. 复制粘贴这一行，回车（★ 必须用 `py -3`，不要写 `python`）：
+
+       py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\install-diag.py" E:
+
+     （把 E: 换成你的 SD 卡盘符；不确定盘符就把 E: 换成 --list 先看一眼）
+     不用先 cd，脚本用自身路径找文件。
+
+     ★ 更省事：直接双击
+       C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\FIX-ENGLISH.bat
+       默认就是 F:，装的是强制英语修复版（根因解法，见 cia/ROOT-CAUSE.txt）。
+
+     ⚠️ 如果写成 `python "..."` 会报
+       /opt/devkitpro/msys2/usr/bin/python: can't open file '/c/Windows/system32/C:\Users\...'
+     这不是文件丢失：PATH 第一项是 MSYS2 版 Python，它按 POSIX 规则把
+     `C:\Users\...` 当成相对路径拼到了当前目录后面。改用 `py -3` 或 .bat 即可。
+
+  4. 看到这些提示就对了：
+       备份现有 3dsx -> SMG-3DS.3dsx.stock
+       覆盖 -> E:\3ds\SMG-3DS\SMG-3DS.3dsx
+       校验: OK
+     脚本会自动备份原版、删掉上一次的旧日志，不会动 game.wbfs。
+
+  想先看它要做什么、不真的写：把上面的 E: 换成 E: --dry-run
+
+◆ 做法 B：纯手动（不用命令行）
+
+  1. SD 卡插电脑，打开「此电脑」→ SD 卡盘符。
+  2. 打开文件夹 `3ds` → `SMG-3DS`。
+  3. 先在资源管理器顶部「查看」里勾上「文件扩展名」
+     （否则重命名很容易变成 SMG-3DS.3dsx.3dsx，这是最常见的翻车点）。
+  4. 找到 `SMG-3DS.3dsx`（6,704,396 字节），复制一份到电脑桌面当备份，
+     改名成 `SMG-3DS.3dsx.backup`。**别删 SD 卡上的原文件，下一步要覆盖它**。
+  5. 在本机打开：
+       C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\optional\
+     复制里面的 `SMG-3DS-diag.3dsx`。
+  6. 回到 SD 卡的 `3ds\SMG-3DS\` 文件夹，粘贴，
+     然后把新文件**重命名为 `SMG-3DS.3dsx`**，Windows 问「是否覆盖」→ 选「是」。
+     （最终名字必须一模一样：SMG-3DS.3dsx，不能带 -diag）
+  7. 如果这个文件夹里有旧的 `boot-log.txt`，删掉它，免得拿到上一次的日志。
+  8. 右键任务栏的「安全弹出硬件」→ 弹出 SD 卡，再拔卡。
+
+
+────────────────────────────────────────
+第 2 步：在 3DS 上跑一次
+────────────────────────────────────────
+
+  1. SD 卡插回 3DS，开机。
+  2. 打开 **Homebrew Launcher**（这次不要点 HOME 菜单里的 CIA 图标，
+     也不要用那个 SMG-3DS 应用图标，避免混淆）。
+  3. 在列表里找到 `SMG-3DS`，按 A 启动。
+  4. 下屏会出现 `SMG boot bring-up` —— 这是正常的，说明诊断版跑起来了。
+     上屏可能一直是黑的，别慌。
+  5. **耐心等 1～3 分钟**。真机只有约 14 fps，加载很慢；
+     等它自己退出（回到 Homebrew Launcher / HOME 菜单）或者自动重启。
+  6. 中途**不要按 HOME、不要关机、不要拔卡**，让日志完整写完。
+  7. 结束后长按电源关机，拔 SD 卡。
+
+
+────────────────────────────────────────
+第 3 步：把日志取出来
+────────────────────────────────────────
+
+  1. SD 卡插回电脑，打开 `SD:\3ds\SMG-3DS\`。
+  2. 应该能看到 **`boot-log.txt`**（几 KB 的纯文本）。
+  3. 用记事本打开 → Ctrl+A 全选 → Ctrl+C 复制 → 粘贴发给我；
+     或者直接把文件拖进对话里。
+  4. 用完把官方原版换回来（第 4 步）。
+
+  ★ 如果**没有** `boot-log.txt`：
+    - 确认第 1 步真的覆盖成功了（看 SD 卡上 3dsx 的大小是不是
+      **6,590,896 字节**（诊断版）；如果还是 6,704,396（官方原版）说明没覆盖成功）
+    - 确认文件名没写错（不能是 SMG-3DS.3dsx.3dsx）
+    - 确认 `3ds\SMG-3DS` 这个文件夹可写
+    - 仍然没有的话告诉我，说明程序在写日志之前就挂了，我换一个更早的打点方案
+
+
+────────────────────────────────────────
+第 4 步：恢复官方原版（重要）
+────────────────────────────────────────
+
+  ◆ 用过脚本 A：
+
+       py -3 "C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\install-diag.py" E: --restore
+
+  ◆ 手动做法 B：
+       把桌面的 `SMG-3DS.3dsx.backup` 改回 `SMG-3DS.3dsx`，
+       拷回 `SD:\3ds\SMG-3DS\` 覆盖；
+       或者直接从 C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\3ds\SMG-3DS\SMG-3DS.3dsx 再拷一次。
+
+
+日志里我会看什么
+-----------------
+  DIAG: stderr mirrored to boot-log.txt     诊断版生效
+  mario-probe: application memory X KiB     ★ 最关键：Azahar 是 126976 KiB(124MB)，
+                                          真机若只有 ~65536 KiB(64MB) 就是内存不足
+  The disc: WBFS, game RMGE01              盘读到了
+  The disc image (...): 原因                读盘失败，原因直接写在后面
+  mario-probe: data abort at pc ..., lr ...  CPU 异常，地址能定位到具体模块
+  mario-probe: callers on the stack: ...    调用栈
+  DIAG: smgGameMain returned               正常返回（真机上基本见不到）
+
+
+常见问题
+--------
+Q：会不会弄坏我的 SD 卡 / 存档？
+A：只覆盖一个 3dsx 并备份成 .stock；`game.wbfs`、`settings.ini`、`nand/`
+   （存档）都不动。恢复脚本一键还原。
+
+Q：这次要用 CIA 吗？
+A：不用。这次只走 Homebrew Launcher 的 3dsx，路径越简单越好。
+   之前装的 CIA 可以先不管，别去点它。
+
+Q：为什么不让 Luma 写 dump？
+A：程序自己用 `threadOnException(smgFault)` 接管了 CPU 异常，
+   打印完就 `svcExitProcess()` 退出了，Luma 没机会生成 `luma/dumps/`。
+   所以我们才改成让程序自己把 stderr 写进文件。
+
+Q：诊断版会不会更卡 / 影响判断？
+A：只在启动时写几行文本、无缓冲落盘，不在渲染循环里写，
+   对帧率无影响；游戏逻辑与官方 v0.1.0 原版一致（只多了 GCC 15 链接修复）。
+
+诊断版 SHA-256 a34b998e70b5d18efd65ee2c1b89afa7e8852a6006cf1e4ae8610fdecf83140a
+更完整的机制说明见 C:\Users\WXP\WorkBuddy\2026-11-08-01-41-44\smg3ds\real-hardware\cia\HOWTO-DIAG.txt
+
+2026-11-08
